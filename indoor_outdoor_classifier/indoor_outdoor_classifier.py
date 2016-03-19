@@ -27,7 +27,7 @@ import pandas as pd
 import numpy as np
 import os
 
-TRAINING_DATA_PATH = './data/inOutTrng.json'
+TRAINING_DATA_PATH = '/data/inOutTrng.json'
 
 # Will use this percent of data to train. Will use 1-this to test
 IN_TEST_PERCENT = 0.8
