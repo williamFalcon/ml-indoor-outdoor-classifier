@@ -25,6 +25,7 @@ SOFTWARE.
 from sklearn import svm
 import pandas as pd
 import numpy as np
+import os
 
 TRAINING_DATA_PATH = './data/inOutTrng.json'
 
@@ -135,9 +136,10 @@ class InOutClassifier(object):
         """
         Load data into frames, then to numpy arrays
         """
+        full_path = os.path.dirname(os.path.realpath(__file__)) + TRAINING_DATA_PATH
 
         # load json
-        df = pd.read_json(TRAINING_DATA_PATH)
+        df = pd.read_json(full_path)
         df['gpsAccuracyHor'] = df.apply(self.__vert_compare, axis=1)
         self.__make_feature_binary(df, 'gpsCourse', -1)
 
