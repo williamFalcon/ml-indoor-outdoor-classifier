@@ -1,6 +1,6 @@
 #Indoor/Outdoor classifier
 Can predict whether the device is indoors or outdoors given the following vector:   
-[gpsAccuracyHor, gpsAccuracyVert, gpsCourse, gpsSpeed]
+```[gpsAccuracyHorizontal, gpsAccuracyVertical, gpsCourse, gpsSpeed]```
 
 ## Example
 ```python
@@ -21,3 +21,15 @@ prediction = clf.predict([indoor_a, indoor_b, outdoor])
 # print results
 print prediction
 ```
+## Implementation Details
+- Algorithm: SVM with a RBF kernel.    
+- Preprocessing: It normalizes horizontal accuracy (which is the strongest predictor),
+to one of 3 values.   
+```
+0 = accuracy <= 50m   
+1 = 50 < accuracy <= 80   
+2 = 80 < accuracy    
+```
+
+## Questions
+Email me at: will@hacstudios.com
