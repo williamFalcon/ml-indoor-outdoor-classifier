@@ -28,8 +28,6 @@ import numpy as np
 import os
 
 TRAINING_DATA_PATH = '/data/inOutTrng.json'
-
-# Will use this percent of data to train. Will use 1-this to test
 IN_TEST_PERCENT = 0.8
 
 
@@ -39,7 +37,7 @@ def run_demo():
     """
     clf = InOutClassifier(verbose=True)
     indoor_a = [130, 9, -1, -1]
-    indoor_b = [6, 9, 2.0, -1]
+    indoor_b = [1400, 9, 2.0, -1]
     outdoor_a = [120, 4, 2.0, 20]
     outdoor_b = [40, 4, 2.0, 1.5]
     prediction = clf.predict([indoor_a, indoor_b, outdoor_a, outdoor_b])
@@ -169,8 +167,10 @@ class InOutClassifier(object):
             return 0
         elif accu <= 80:
             return 1
-        else:
+        elif accu <= 300:
             return 2
+        else:
+            return 3
     
     
     def __vert_compare_dp(self, accu):
@@ -181,8 +181,10 @@ class InOutClassifier(object):
             return 0
         elif accu <= 80:
             return 1
-        else:
+        elif accu <= 300:
             return 2
+        else:
+            return 3
 
                 
     def __make_feature_binary(self, df, feature_name, bin_threshold):
@@ -197,3 +199,4 @@ class InOutClassifier(object):
 
 if __name__ == '__main__':
     run_demo()
+
