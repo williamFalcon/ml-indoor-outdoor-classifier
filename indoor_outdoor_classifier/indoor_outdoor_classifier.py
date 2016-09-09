@@ -1,47 +1,25 @@
-"""
-The MIT License (MIT)
-
-Copyright (c) 2016 William Falcon
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
+from sklearn.cross_validation import cross_val_score
+from sklearn.cross_validation import cross_val_predict
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.feature_selection import RFE
+from sklearn import metrics
 from sklearn import svm
 import pandas as pd
 import numpy as np
 import os
 
-TRAINING_DATA_PATH = '/data/inOutTrng.json'
-IN_TEST_PERCENT = 0.8
+TRAINING_DATA_PATH = '/data/train.csv'
+TESTING_DATA_PATH = '/data/testa.csv'
 
+# ranked in order as chosen by feature selection
+X_FEATURES = [
+'gps_speed', 
+'gps_vertical_accuracy',
+'gps_horizontal_accuracy'
+]
 
-def run_demo():
-    """
-    Demo if used as main
-    """
-    clf = InOutClassifier(verbose=True)
-    indoor_a = [130, 9, -1, -1]
-    indoor_b = [1400, 9, 2.0, -1]
-    outdoor_a = [120, 4, 2.0, 20]
-    outdoor_b = [40, 4, 2.0, 1.5]
-    prediction = clf.predict([indoor_a, indoor_b, outdoor_a, outdoor_b])
-    print prediction
+Y_FEATURE = ['indoors']
 
 
 class InOutClassifier(object):
@@ -54,148 +32,122 @@ class InOutClassifier(object):
     Prediction results:
     0 - Outdoors
     1 - Indoors
-
-    Input vector order:
-    [gpsAccuracyHor, gpsAccuracyVert, gpsCourse, gpsSpeed]
     """
-
-    def __init__(self, verbose=False):
+    def __init__(self, print_tng_accuracy=False):
         print 'training...'
-        self.clf = self.__train_in_out_svm(verbose)
+        self.clf = self.__train_in_out_svm(print_tng_accuracy)
         print 'training complete!...'
 
-
+    #----------------------------------------------------
+    # LEARNING AND PREDICTING
+    #----------------------------------------------------
     def predict(self, data_points):
         """
         Wrapper around the prediction func of svm
         """
-        # make three features binary for better accuracy
-        self.__normalize_data_points(data_points)
         return self.clf.predict(data_points)
 
 
-    def __normalize_data_points(self, data_points):
+    def __train_in_out_svm(self, print_tng_accuracy):
         """
-        Puts binary restrictions on each data point
-        """
-        for data_point in data_points:
-            data_point[0] = self.__vert_compare_dp(data_point[0])
-            data_point[2] = 0 if data_point[2] <= -1 else 1
-                
-        
-    def __train_in_out_svm(self, verbose):
-        """
-        Trains an svm using 80/20 from the json file path.
         Prints stats about accuracy on completion
         """
         clf = svm.SVC()
 
         # load tng and testing data
-        X_train, Y_train, X_test, Y_test = self.__load_tng_data()
+        X_train, Y_train = self.__load_data(TRAINING_DATA_PATH)
 
         # train classifier
         clf.fit(X_train, Y_train)
 
-        # measure accuracy and print stats
-        accuracy = self.__test_accuracy(clf, X_test, Y_test)
+        # print accuracy stats if requested
+        if print_tng_accuracy:
+            X_test, Y_test = self.__load_data(TESTING_DATA_PATH)
+            self.__test_features(X_train, Y_train, X_test, Y_test)
 
-        # print stats if requested
-        if verbose:
-            self.print_svm_stats(clf, accuracy, len(X_train), len(X_test))
+            # measure accuracy and print stats
+            predicted = cross_val_predict(clf, X_test, Y_test)
+            test_scores = metrics.accuracy_score(Y_test, predicted)
+            self.__print_svm_stats(clf, len(X_train), len(X_test), test_scores)
 
         return clf
 
+    #----------------------------------------------------
+    # FEATURES UTILS
+    #----------------------------------------------------
+    def __generate_features(self, df):
+        # shuffle first
+        df_shuffled = df.iloc[np.random.permutation(len(df))]
+        df_shuffled = df_shuffled.reset_index(drop=True)
 
-    def print_svm_stats(self, clf, accuracy, train_size, test_size):
-        print '-------------------------------'
-        print 'SVM Config: '
-        print clf
-        print '\nAccuracy: %.2f' % (accuracy*100)
-        print 'Trained with: ', train_size
-        print 'Tested with: ', test_size
-        print '-------------------------------'
+        # extract the necessary features
+        X = df_shuffled[X_FEATURES]
+        Y = df_shuffled[Y_FEATURE]
 
+        # scale and generate new features
 
-    def __test_accuracy(self, clf, X_test, Y_test):
+        # flatten and cast to proper sklearn format
+        X = X.values.astype(np.float64)
+        Y = Y.values.astype(np.int32).flatten()
+
+        return X, Y
+
+    def __test_features(self, X_train, Y_train, X_test, Y_test):
         """
-        Predicts and counts against training data for accuracy
+        Runs feature selection. Pass in the dimensions you think are important
+        and it will rank them by importance
         """
-        matches = 0
-        for i, x in enumerate(X_test):
-            prediction = clf.predict([x])
+        print('running feature selection...')
+        model = ExtraTreesClassifier()
+        model.fit(X_train, Y_train)
 
-            if prediction[0] == Y_test[i]:
-                matches += 1
+        # display the relative importance of each attribute
+        print(model.feature_importances_)
+        print('---------------------------')
+        model = LogisticRegression()
 
-        return matches / float(len(Y_test))
+        # create the RFE model and select 3 attributes
+        rfe = RFE(model, 3)
+        rfe = rfe.fit(X_train, Y_train)
+
+        # summarize the selection of the attributes
+        print(rfe.support_)
+        print(rfe.ranking_)
+
+    #----------------------------------------------------
+    # UTILS
+    #----------------------------------------------------
+    def __print_svm_stats(sefl, clf, train_size, test_size, test_scores):
+        print('\n-------------------------------')
+        print('SVM Config: ')
+        print(clf)
+        print('Trained with: ')
+        print(train_size)
+        print('Testing accuracy: ')
+        print(test_scores)
+        print('Tested with: %d' %(test_size))
+
+        print('-------------------------------')
 
 
-    def __load_tng_data(self):
+    def __load_data(self, path):
         """
         Load data into frames, then to numpy arrays
         """
-        full_path = os.path.dirname(os.path.realpath(__file__)) + TRAINING_DATA_PATH
+        full_path = os.path.dirname(os.path.realpath(__file__)) + path
 
         # load json
-        df = pd.read_json(full_path)
-        df['gpsAccuracyHor'] = df.apply(self.__vert_compare, axis=1)
-        self.__make_feature_binary(df, 'gpsCourse', -1)
+        cols = X_FEATURES.extend(Y_FEATURE)
+        df = pd.read_csv(full_path, usecols=cols)
 
-        # generate testing and training data
-        mask = np.random.rand(len(df)) < IN_TEST_PERCENT
-        X_train = df[mask]
-        X_test = df[~mask]
+        print('generating features...')
+        X_train, Y_train = self.__generate_features(df)
 
-        # Get Y values on their own
-        Y_train = X_train['inOut']
-        Y_test = X_test['inOut']
+        return X_train, Y_train
 
-        # Remove Y values from DataFrames
-        del X_train['inOut']
-        del X_test['inOut']
-
-        # return as numpy arrays for easier input into the SVM
-        return X_train.as_matrix(), Y_train.as_matrix(), X_test.as_matrix(), Y_test.as_matrix()
-        
-        
-    def __vert_compare(self, s):
-        """
-        Compare function to normalize all gps horizontal accuracies
-        """
-        accu = s['gpsAccuracyHor']
-        if accu <= 50:
-            return 0
-        elif accu <= 80:
-            return 1
-        elif accu <= 300:
-            return 2
-        else:
-            return 3
-    
-    
-    def __vert_compare_dp(self, accu):
-        """
-        Compare function to normalize all tessting points for predict
-        """
-        if accu <= 50:
-            return 0
-        elif accu <= 80:
-            return 1
-        elif accu <= 300:
-            return 2
-        else:
-            return 3
-
-                
-    def __make_feature_binary(self, df, feature_name, bin_threshold):
-        """
-        Changes a numerical feature to binary to
-        make decision boundary simpler
-        """
-        # change feature to binary given the threshold
-        boolFunc = lambda s: 0 if (s[feature_name] <= bin_threshold) else 1
-        df[feature_name] = df.apply(boolFunc, axis=1)
-
+def run_demo():
+    print('running demo...')
+    clf = InOutClassifier(print_tng_accuracy=True)
 
 if __name__ == '__main__':
     run_demo()
