@@ -22,7 +22,7 @@ prediction = clf.predict([indoor_a, indoor_b, outdoor])
 print prediction
 ```    
 ## Accuracy   
-$98.6$ percent in test set.    
+98.6 percent in test set.    
 
 ## Implementation Details
 - Algorithm: RandomForest with 5 trees.    
